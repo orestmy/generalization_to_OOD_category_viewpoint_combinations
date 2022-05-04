@@ -44,6 +44,7 @@ create_folder("outputs/%s"%args.experiment_out_name)
 create_folder("outputs/%s/saved_models"%args.experiment_out_name)
 create_folder("outputs/%s/accuracies"%args.experiment_out_name)
 create_folder("outputs/%s/logs"%args.experiment_out_name)
+create_folder("outputs/%s/losses"%args.experiment_out_name)
 
 #with open('args.p','wb') as F:
 #    pickle.dump(args, F)
@@ -61,7 +62,8 @@ if args.start_checkpoint_path:
     checkpoint_model_name = args.start_checkpoint_path.split("/")[-1].split(".pt")[0]
     SAVE_FILE_SUFFIX = "%s_%s" % (SAVE_FILE_SUFFIX, checkpoint_model_name)
 # In[36]:
-train_file_name = __file__.split(".")[0]
+file = os.path.basename(__file__)
+train_file_name = os.path.splitext(file)[0]
 
 if TASK == "combined":
     SAVE_FILE = "outputs/%s/logs/%s_%s_%s_%s_%s_%s.out" % (
