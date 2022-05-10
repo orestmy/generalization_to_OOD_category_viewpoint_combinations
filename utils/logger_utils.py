@@ -61,9 +61,9 @@ def get_log_filehandle(args, train_file_name):
     SAVE_HANDLER = open(SAVE_FILE, "w")
     return SAVE_HANDLER
 
-def log_wandb(phase, epoch_loss, epoch_accs):
+def log_wandb(phase, epoch, epoch_loss, epoch_accs):
     logdict = {}
     logdict[phase + '_loss'] = epoch_loss.item()
     for id, acc in enumerate(epoch_accs):
         logdict[phase + '_acc{}'.format(id)] = acc
-    wandb.log(logdict)
+    wandb.log(logdict, step = epoch)

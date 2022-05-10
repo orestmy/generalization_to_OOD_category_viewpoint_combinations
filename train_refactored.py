@@ -21,7 +21,8 @@ args = utils_log.parse_config()
 utils_log.create_logging_folders(args)
 
 if args.wandblog:
-    wandb.init(project='ood-generalisation', name='runnametest2')
+    wandb.init(project='ood-generalisation')
+               # ,               name='runnametest2')
 
 DATASET_NAME = args.dataset_name
 NUM_EPOCHS = args.num_epochs
@@ -38,10 +39,10 @@ file = os.path.basename(__file__)
 train_file_name = os.path.splitext(file)[0]
 
 SAVE_HANDLER = utils_log.get_log_filehandle(args, train_file_name)
+SAVE_HANDLER = sys.stdout
 
 
 print(args, file=SAVE_HANDLER, flush=True)
-sys.stdout.flush()
 
 
 image_transform = transforms.Compose(
@@ -64,6 +65,7 @@ dset_sizes = {}
 for phase in ["train", "val", "test"]:
     file_lists[phase] = "%s/%s_list_%s.txt" % (file_list_root, phase, DATASET_NAME)
     dsets[phase] = dataset_cls(file_lists[phase], att_path, image_transform, data_dir)
+    # dsets[phase].show_images_on_subplot_categories(4,4)
     dset_loaders[phase] = torch.utils.data.DataLoader(
         dsets[phase],
         batch_size=BATCH_SIZE,
@@ -78,7 +80,6 @@ print("Dataset sizes:", file=SAVE_HANDLER)
 print(len(dsets["train"]), file=SAVE_HANDLER)
 print(len(dsets["val"]), file=SAVE_HANDLER)
 print(len(dsets["test"]), file=SAVE_HANDLER)
-sys.stdout.flush()
 
 
 if args.start_checkpoint_path:
@@ -97,7 +98,7 @@ if GPU:
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 
 
-def weight_scheduler(epoch_num):
+def cost_weight_task():
     if TASK == "rotation":
         return [0.0, 1.0, 0.0, 0.0]
     if TASK == "car_model":
@@ -109,25 +110,13 @@ def weight_scheduler(epoch_num):
 best_model = model
 best_model_gm = model
 best_acc = 0.0
-
-losses = {}
-accuracies = {}
-
-losses["train"] = []
-losses["val"] = []
-
-accuracies["train"] = []
-accuracies["val"] = []
-
 best_val_loss = 100
 
 for epoch in range(NUM_EPOCHS):
     print("Epoch %s" % epoch, file=SAVE_HANDLER, flush=True)
-    sys.stdout.flush()
-    weights = weight_scheduler(epoch)
-    for phase in ("train", "val"):
+    cost_weights = cost_weight_task()
+    for phase in ("train", "val", "test"):
         print("%s phase" % phase, file=SAVE_HANDLER, flush=True)
-        sys.stdout.flush()
         iters = 0
         phase_epoch_corrects = [0, 0, 0, 0]
         phase_epoch_loss = 0
@@ -136,7 +125,6 @@ for epoch in range(NUM_EPOCHS):
             torch.set_grad_enabled(True)
         else:
             print("model eval", file=SAVE_HANDLER)
-            sys.stdout.flush()
             model.eval()
             torch.set_grad_enabled(False)
 
@@ -158,7 +146,7 @@ for epoch in range(NUM_EPOCHS):
 
                 loss = multi_losses[i]
                 outputs = model_outs[i]
-                calculated_loss += weights[i] * loss(outputs, labels)
+                calculated_loss += cost_weights[i] * loss(outputs, labels)
                 _, preds = torch.max(outputs.data, 1)
                 batch_corrects[i] = torch.sum(preds == labels.data)
                 phase_epoch_corrects[i] += batch_corrects[i]
@@ -171,7 +159,6 @@ for epoch in range(NUM_EPOCHS):
 
             if iters % 50 == 0:
                 print("Epoch %s, Iters %s" % (epoch, iters), file=SAVE_HANDLER)
-                sys.stdout.flush()
             iters += 1
 
         epoch_loss = phase_epoch_loss / dset_sizes[phase]
@@ -185,13 +172,9 @@ for epoch in range(NUM_EPOCHS):
 
         print("Epoch loss: %s" % epoch_loss.item(), file=SAVE_HANDLER)
         print("Epoch accs: ", epoch_accs, file=SAVE_HANDLER)
-        sys.stdout.flush()
 
         if args.wandblog:
-            utils_log.log_wandb(phase, epoch_loss, epoch_accs)
-
-        losses[phase].append(epoch_loss.item())
-        accuracies[phase].append(epoch_accs)
+            utils_log.log_wandb(phase, epoch, epoch_loss, epoch_accs)
 
         if phase == "val":
             if epoch_loss < best_val_loss:
@@ -207,44 +190,13 @@ for epoch in range(NUM_EPOCHS):
                 best_model_gm = model
 
 if TASK == "combined":
-    with open(
-        "outputs/%s/saved_models/%s_model_%s_%s_%s.pt"
-        % (args.experiment_out_name, train_file_name, ARCH, DATASET_NAME, SAVE_FILE_SUFFIX),
-        "wb",
-    ) as F:
-        torch.save(best_model, F)
+    modelpath = "outputs/%s/saved_models/%s_model_%s_%s_%s.pt"%(args.experiment_out_name, train_file_name, ARCH, DATASET_NAME, SAVE_FILE_SUFFIX)
 else:
-    with open(
-        "outputs/%s/saved_models/%s_%s_model_%s_%s_%s.pt"
-        % (args.experiment_out_name, train_file_name, TASK, ARCH, DATASET_NAME, SAVE_FILE_SUFFIX),
-        "wb",
-    ) as F:
+    modelpath = "outputs/%s/saved_models/%s_%s_model_%s_%s_%s.pt"%(args.experiment_out_name, train_file_name, TASK, ARCH, DATASET_NAME, SAVE_FILE_SUFFIX)
+with open(modelpath,"wb") as F:
         torch.save(best_model, F)
 
-for phase in ["test"]:
-    print("%s phase" % phase, file=SAVE_HANDLER)
-    phase_epoch_corrects = 0
-    model.eval()
-    torch.set_grad_enabled(False)
-    test_epoch_corrects = [0, 0, 0, 0]
-    for data in dset_loaders[phase]:
-        inputs, labels_all, paths = data
-        if GPU:
-            inputs = Variable(inputs.float().cuda())
-        model_outs = best_model(inputs)
-
-        test_batch_corrects = [0, 0, 0, 0]
-        for i in range(4):
-            labels = labels_all[:, i]
-            if GPU:
-                labels = Variable(labels.long().cuda())
-            outputs = model_outs[i]
-
-            _, preds = torch.max(outputs.data, 1)
-            test_batch_corrects[i] = torch.sum(preds == labels.data)
-            test_epoch_corrects[i] += test_batch_corrects[i]
-
-    test_epoch_accs = [float(i) / dset_sizes[phase] for i in test_epoch_corrects]
-    print("Epoch acc: ", test_epoch_accs, file=SAVE_HANDLER)
-
-print('Job completed.')
+if args.wandblog:
+    wandb.config.update({"model_path": modelpath})
+    wandb.save(os.path.join(os.getcwd(),modelpath))
+print('Job completed, best model saved')
