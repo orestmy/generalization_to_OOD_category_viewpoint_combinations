@@ -96,3 +96,95 @@ class FileListFolder(data.Dataset):
         # tmp = '    Target Transforms (if any): '
         # fmt_str += '{0}{1}'.format(tmp, self.target_transform.__repr__().replace('\n', '\n' + ' ' * len(tmp)))
         return fmt_str
+
+    def getStats(self):
+        dict = {}
+        for i in range(5):
+            dict['category{}'.format(i)] = {}
+        for i in range(len(self.samples)):
+            transformed_sample, transformed_labels, impath = self.__getitem__(i)
+            category = transformed_labels[1].item()
+            rot = transformed_labels[3].item()
+            myd = dict['category{}'.format(category)]
+            if rot in myd:
+                myd[rot] +=1
+            else:
+                myd[rot] = 1
+        return dict
+
+    def getStasMatrix(self):
+        occurences = [[0]*5 for _ in range(5)]
+        for i in range(len(self.samples)):
+            transformed_sample, transformed_labels, impath = self.__getitem__(i)
+            category = transformed_labels[1].item()
+            rot = transformed_labels[3].item()
+            occurences[category][rot] +=1
+
+        print('\n'.join([''.join(['{:4}'.format(item) for item in row])
+                         for row in occurences]))
+        return occurences
+
+    def getStasMatrix_ImPath(self):
+        occurences = [[[] for j in range(5)] for _ in range(5)]
+        labels = [[[] for j in range(5)] for _ in range(5)]
+        for i in range(len(self.samples)):
+            transformed_sample, transformed_labels, impath = self.__getitem__(i)
+            category = transformed_labels[1].item()
+            rot = transformed_labels[3].item()
+            occurences[category][rot].append(impath)
+            labels[category][rot].append(transformed_labels)
+
+        return occurences, labels
+
+    def show_images_on_subplot(self):
+        from os import listdir
+        from os.path import isfile, join
+        import matplotlib.image as mpimg
+
+        # mypath = '/home/orest/code/fle-pcb/data/supertoroids_objects81/raw/meshes/img/'
+        # imgfiles = sorted([f for f in listdir(mypath) if isfile(join(mypath, f))])
+        occ, lab = self.getStasMatrix_ImPath()
+        f, axarr = plt.subplots(5, 5)
+        f.set_size_inches(12,12)
+        for i in reversed(range(0, 5)):
+            for j in range(5):
+                if len(occ[i][j]):
+                    img = mpimg.imread(occ[i][j][0])
+                else:
+                    img = np.zeros((224, 224, 3))
+
+                axarr[i, j].imshow(img)
+                axarr[i, j].axis('off')
+                # axarr[i, j].set_title('Label = {},{}'.format(i,j), fontsize=8)
+
+        f.tight_layout(pad=0.0, h_pad=0)
+        plt.axis('off')
+        plt.show()
+
+
+    def show_images_on_subplot_categories(self, category=0, viewpoint=0):
+        from os import listdir
+        from os.path import isfile, join
+        import matplotlib.image as mpimg
+
+        # mypath = '/home/orest/code/fle-pcb/data/supertoroids_objects81/raw/meshes/img/'
+        # imgfiles = sorted([f for f in listdir(mypath) if isfile(join(mypath, f))])
+        occ,lab = self.getStasMatrix_ImPath()
+        f, axarr = plt.subplots(5, 5)
+        f.set_size_inches(12,12)
+        if len(occ[category][viewpoint])<25:
+            return
+        occv = occ[category][viewpoint][:25]
+        labv = lab[category][viewpoint][:25]
+        k=0
+        for i in range(5):
+            for j in range(5):
+                img = mpimg.imread(occv[k])
+                axarr[i, j].imshow(img)
+                axarr[i, j].axis('off')
+                axarr[i, j].set_title('Label = {}'.format(labv[k].numpy()), fontsize=8)
+                k+=1
+
+        f.tight_layout(pad=0.0, h_pad=0)
+        plt.axis('off')
+        plt.show()
