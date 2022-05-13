@@ -83,6 +83,9 @@ class FileListFolder(data.Dataset):
 
         self.transform = transform
 
+        self.target_transform = transforms.Compose([
+        transforms.Resize((224, 224))])
+
         with open(attributes_dict, 'rb') as F:
             attributes = pickle.load(F)
 
@@ -103,15 +106,21 @@ class FileListFolder(data.Dataset):
         label_path = impath.replace('images/frame','labels/label_frame')
 #         return impath, label_path
         sample = Image.open(impath)
-        label = np.array(Image.open(label_path))
+        label = Image.open(label_path)
 
         if self.transform is not None:
             transformed_sample = self.transform(sample)
-#         if self.target_transform is not None:
-#             target = self.target_transform(label)
-        
-        formatted_label = format_label(label)
-        return transformed_sample, formatted_label, impath
+
+
+        # cars
+        formatted_label = format_label(np.array(label))[-1]
+        formatted_label = np.expand_dims(formatted_label, 0)
+        if self.target_transform is not None:
+            formatted_label = self.target_transform(torch.tensor(formatted_label))
+
+        # label = np.array(label)
+
+        return transformed_sample, np.array(formatted_label), impath
 
     def __len__(self):
         return len(self.samples)
@@ -126,3 +135,30 @@ class FileListFolder(data.Dataset):
         # tmp = '    Target Transforms (if any): '
         # fmt_str += '{0}{1}'.format(tmp, self.target_transform.__repr__().replace('\n', '\n' + ' ' * len(tmp)))
         return fmt_str
+
+    def show_images_on_subplot(self, labels=True, images=False):
+        showcase = []
+        items = [self.__getitem__(i) for i in range(25)]
+        if labels:
+            labels = [items[i][1].squeeze() for i in range(25)]
+            showcase.append(labels)
+        if images:
+            images = [items[i][0].permute(1,2,0) for i in range(25)]
+            showcase.append(images)
+
+
+        for imgLabels in showcase:
+            f, axarr = plt.subplots(5, 5)
+            f.set_size_inches(12, 12)
+
+            k = 0
+            for i in reversed(range(0, 5)):
+                for j in range(5):
+                    img = imgLabels[k]
+                    axarr[i, j].imshow(img)
+                    axarr[i, j].axis('off')
+                    k += 1
+
+            f.tight_layout(pad=0.0, h_pad=0)
+            plt.axis('off')
+            plt.show()
