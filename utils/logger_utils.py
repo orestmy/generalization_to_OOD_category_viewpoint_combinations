@@ -17,6 +17,7 @@ def parse_config():
     args = parser.parse_args()
     return args
 
+
 def create_logging_folders(args):
     def create_folder(fol):
         if not os.path.isdir(fol):
@@ -28,6 +29,7 @@ def create_logging_folders(args):
     create_folder("outputs/%s/accuracies" % args.experiment_out_name)
     create_folder("outputs/%s/logs" % args.experiment_out_name)
     create_folder("outputs/%s/losses" % args.experiment_out_name)
+
 
 def get_log_filehandle(args, train_file_name):
     DATASET_NAME = args.dataset_name
@@ -61,9 +63,31 @@ def get_log_filehandle(args, train_file_name):
     SAVE_HANDLER = open(SAVE_FILE, "w")
     return SAVE_HANDLER
 
+
 def log_wandb(phase, epoch, epoch_loss, epoch_accs):
     logdict = {}
     logdict[phase + '_loss'] = epoch_loss.item()
     for id, acc in enumerate(epoch_accs):
         logdict[phase + '_acc{}'.format(id)] = acc
-    wandb.log(logdict, step = epoch)
+    wandb.log(logdict, step=epoch)
+
+def log_wandb(phase, epoch, d_metric):
+    oldkeys = list(d_metric.keys())
+    for old_key in oldkeys:
+        d_metric['{}_{}'.format(phase, old_key)] = d_metric.pop(old_key)
+    wandb.log(d_metric, step=epoch)
+
+
+def labels():
+    segmentation_classes = ['void', 'car']
+    l = {}
+    for i, label in enumerate(segmentation_classes):
+        l[i] = label
+    return l
+
+
+# util function for generating interactive image mask from components
+def wb_mask(bg_img, pred_mask, true_mask):
+    return wandb.Image(bg_img, masks={
+        "prediction": {"mask_data": pred_mask, "class_labels": labels()},
+        "ground truth": {"mask_data": true_mask, "class_labels": labels()}})

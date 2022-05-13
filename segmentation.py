@@ -13,6 +13,7 @@ from utils.data_utils import get_dataset_info
 
 from models.models import get_model
 import wandb
+from metrics.segmentation_metrics import IoU_Metric
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
@@ -30,7 +31,7 @@ def get_transforms():
     )
 
 
-def get_datasets_loaders(args, debugImages = False):
+def get_datasets_loaders(args, debugImages=False):
     print(args, file=SAVE_HANDLER, flush=True)
 
     image_transform = get_transforms()
@@ -48,7 +49,7 @@ def get_datasets_loaders(args, debugImages = False):
         file_lists[phase] = "%s/%s_list_%s.txt" % (file_list_root, phase, args.dataset_name)
         dsets[phase] = dataset_cls(file_lists[phase], att_path, image_transform, data_dir)
         if debugImages:
-            dsets[phase].show_images_on_subplot(labels=True, images=True)
+            dsets[phase].show_images_on_subplot(labels=True, images=False)
 
         dset_loaders[phase] = torch.utils.data.DataLoader(
             dsets[phase],
@@ -67,42 +68,39 @@ def get_datasets_loaders(args, debugImages = False):
     return dsets, dset_loaders, dset_sizes, NUM_CLASSES
 
 
-def train_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes, GPU, best_model_metrics, phases=('train', 'val')):
+def train_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes, GPU, best_model_metrics, metric_tracker,
+                    phases=('train', 'val')):
+
     best_model, best_acc, best_val_loss = best_model_metrics[0], best_model_metrics[1], best_model_metrics[2]
     print("Epoch %s" % epoch, file=SAVE_HANDLER, flush=True)
     for phase in phases:
         print("%s phase" % phase, file=SAVE_HANDLER, flush=True)
         iters = 0
-        phase_epoch_corrects = [0, 0, 0, 0]
         phase_epoch_loss = 0
+
         if phase == "train":
             model.train()
             torch.set_grad_enabled(True)
         else:
             print("model eval", file=SAVE_HANDLER)
-            model.eval_one_epoch()
+            model.eval()
             torch.set_grad_enabled(False)
 
+        metric_tracker.reset()
         for data in dset_loaders[phase]:
-            inputs, labels_all, paths = data
+            inputs, labels, paths = data
+            labels = labels.long().squeeze()
+
             if GPU:
-                inputs = Variable(inputs.float().cuda())
+                inputs = inputs.float().cuda()
+                labels = labels.cuda()
 
             optimizer.zero_grad()
-            model_outs = model(inputs)
+            pred = model(inputs)
 
-            calculated_loss = 0
-
-            batch_corrects = [0, 0, 0, 0]
-            for i in range(4):
-                labels = labels_all
-                if GPU:
-                    labels = Variable(labels.long().cuda())
-
-                outputs = model_outs
-                calculated_loss += criterion(outputs, labels)
-
+            calculated_loss = criterion(pred, labels)
             phase_epoch_loss += calculated_loss
+            metric_tracker.add(pred.detach(), labels.detach())
 
             if phase == "train":
                 calculated_loss.backward()
@@ -113,19 +111,16 @@ def train_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes
             iters += 1
 
         epoch_loss = phase_epoch_loss / dset_sizes[phase]
-        epoch_accs = [float(i) / dset_sizes[phase] for i in phase_epoch_corrects]
-        gm_epoch_accs = 1
+        d_metric = metric_tracker.finalise()
+        d_metric['loss'] = epoch_loss
 
-        for i in range(4):
-            gm_epoch_accs = gm_epoch_accs * epoch_accs[i]
-        if gm_epoch_accs > best_acc:
-            best_acc = gm_epoch_accs
+
 
         print("Epoch loss: %s" % epoch_loss.item(), file=SAVE_HANDLER)
-        print("Epoch accs: ", epoch_accs, file=SAVE_HANDLER)
+        print("Epoch mIOU: ", d_metric['miou'], file=SAVE_HANDLER)
 
         if args.wandblog:
-            utils_log.log_wandb(phase, epoch, epoch_loss, epoch_accs)
+            utils_log.log_wandb(phase, epoch, d_metric)
 
         if phase == "val":
             if epoch_loss < best_val_loss:
@@ -135,8 +130,9 @@ def train_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes
         best_model_metrics[0], best_model_metrics[1], best_model_metrics[2] = best_model, best_acc, best_val_loss
 
 
-def eval_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes, GPU, best_model_metrics):
-    train_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes, GPU, best_model_metrics, phases=('test'))
+def eval_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes, GPU, best_model_metrics, metric_tracker):
+    train_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes, GPU, best_model_metrics, metric_tracker,
+                    phases=('test',))
 
 
 def save_models(args, SAVE_FILE_SUFFIX):
@@ -162,7 +158,7 @@ def train(args):
         wandb.init(project='ood-generalisation')
         # ,               name='runnametest2')
 
-    dsets, dset_loaders, dset_sizes, NUM_CLASSES = get_datasets_loaders(args, debugImages=True)
+    dsets, dset_loaders, dset_sizes, NUM_CLASSES = get_datasets_loaders(args, debugImages=False)
 
     SAVE_FILE_SUFFIX = args.save_file_suffix
     if args.start_checkpoint_path:
@@ -175,25 +171,43 @@ def train(args):
 
     criterion = nn.CrossEntropyLoss()
 
+    # device = torch.device("cpu" if not torch.cuda.is_available() else args.device)
     GPU = torch.cuda.is_available()
     if GPU:
         model.cuda()
 
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-    # best_model = model
-    # best_acc = 0.0
-    # best_val_loss = 100
-    # best_model_metric = [best_model, best_acc, best_val_loss]
-    #
-    # for epoch in range(args.num_epochs):
-    #     train_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes, GPU, best_model_metric)
-    #     eval_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes, GPU, best_model_metric)
+    best_model = model
+    best_acc = 0.0
+    best_val_loss = 100
+    best_model_metric = [best_model, best_acc, best_val_loss]
+
+    metric_tracker = IoU_Metric(num_classes=2)
+
+    for epoch in range(args.num_epochs):
+        train_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes, GPU, best_model_metric, metric_tracker)
+        eval_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes, GPU, best_model_metric, metric_tracker)
     #
     # save_models(args, SAVE_FILE_SUFFIX)
     print('Job completed')
 
 
+def dummy_CE():
+    loss = nn.CrossEntropyLoss()
+    input = torch.randn(10, 1, 3, 5, requires_grad=True)
+    target = torch.empty(10, 3, dtype=torch.long).random_(5)
+    output = loss(input, target)
+    output.backward()
+
+    # input = torch.randn(3, 5, requires_grad=True)
+    #
+    # target = torch.randn(3, 5).softmax(dim=1)
+    # output = loss(input, target)
+    output.backward()
+
+
 if __name__ == "__main__":
     args = utils_log.parse_config()
     train(args)
+    # dummy_CE()

@@ -95,3 +95,6 @@ def get_model(MODEL_ARCH,NUM_CLASSES):
     if MODEL_ARCH == 'MULTITASK_WIDE_RESNET_WIDE':
         from models.LATE_BRANCHING_COMBINED_WIDER import wide_resnet50_2
         return wide_resnet50_2(num_classes = NUM_CLASSES)
+    if MODEL_ARCH == 'Unet':
+        from models.UNet import UNet
+        return UNet(out_channels=1)
