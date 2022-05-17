@@ -167,10 +167,14 @@ def on_epoch_end(args, model, dsets, GPU, num_to_log=4):
         bg_image = utils_log.image2np(get_transforms(True)(inputs) * 255).astype(np.uint8)
         # run the model on that image
 
-        labels = labels.long().squeeze()
+        labels = labels.squeeze()
         if GPU:
             inputs = inputs.float().cuda()
             labels = labels.cuda()
+
+        # for label in labels:
+        #     plt.imshow((label>=0.99).cpu().numpy())
+        #     plt.show()
 
         prediction_mask = model(inputs)
         # for label in prediction_mask:
@@ -183,7 +187,10 @@ def on_epoch_end(args, model, dsets, GPU, num_to_log=4):
 
         # ground truth mask
         true_mask = utils_log.image2np(torch.unsqueeze(labels, 1)).astype(np.uint8)
-        # keep a list of composite images
+        # for label in true_mask:
+        #     plt.imshow(label)
+        #     plt.show()
+
         mask_list.extend(utils_log.wb_mask(bg_image, prediction_mask, true_mask))
 
         # log all composite images to W&B
