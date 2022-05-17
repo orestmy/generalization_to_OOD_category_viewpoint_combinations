@@ -2,11 +2,10 @@ from __future__ import print_function, division
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.autograd import Variable
 from torchvision import transforms
 import os
 from PIL import ImageFile
-
+import numpy as np
 import sys
 import utils.logger_utils as utils_log
 from utils.data_utils import get_dataset_info
@@ -14,21 +13,28 @@ from utils.data_utils import get_dataset_info
 from models.models import get_model
 import wandb
 from metrics.segmentation_metrics import IoU_Metric
+from utils.random_seed import fix_random_seed
+
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 # SAVE_HANDLER = utils_log.get_log_filehandle(args, train_file_name)
 SAVE_HANDLER = sys.stdout
+from matplotlib import pyplot as plt
+import matplotlib.image as mpimg
 
 
-def get_transforms():
-    return transforms.Compose(
-        [
+def get_transforms(inverse=False):
+    if not inverse:
+        return transforms.Compose([
             transforms.Resize((224, 224)),
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-        ]
-    )
+        ])
+    else:
+        invTrans = transforms.Compose([transforms.Normalize(mean=[0., 0., 0.], std=[1 / 0.229, 1 / 0.224, 1 / 0.225]),
+                                       transforms.Normalize(mean=[-0.485, -0.456, -0.406], std=[1., 1., 1.])])
+        return invTrans
 
 
 def get_datasets_loaders(args, debugImages=False):
@@ -68,9 +74,9 @@ def get_datasets_loaders(args, debugImages=False):
     return dsets, dset_loaders, dset_sizes, NUM_CLASSES
 
 
-def train_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes, GPU, best_model_metrics, metric_tracker,
+def train_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes, GPU, best_model_metrics,
+                    metric_tracker,
                     phases=('train', 'val')):
-
     best_model, best_acc, best_val_loss = best_model_metrics[0], best_model_metrics[1], best_model_metrics[2]
     print("Epoch %s" % epoch, file=SAVE_HANDLER, flush=True)
     for phase in phases:
@@ -114,8 +120,6 @@ def train_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes
         d_metric = metric_tracker.finalise()
         d_metric['loss'] = epoch_loss
 
-
-
         print("Epoch loss: %s" % epoch_loss.item(), file=SAVE_HANDLER)
         print("Epoch mIOU: ", d_metric['miou'], file=SAVE_HANDLER)
 
@@ -130,9 +134,61 @@ def train_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes
         best_model_metrics[0], best_model_metrics[1], best_model_metrics[2] = best_model, best_acc, best_val_loss
 
 
-def eval_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes, GPU, best_model_metrics, metric_tracker):
-    train_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes, GPU, best_model_metrics, metric_tracker,
+def eval_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes, GPU, best_model_metrics,
+                   metric_tracker):
+    train_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes, GPU, best_model_metrics,
+                    metric_tracker,
                     phases=('test',))
+
+
+def on_epoch_end(args, model, dsets, GPU, num_to_log=4):
+    model.eval()
+    torch.set_grad_enabled(False)
+    for dset in dsets:
+        dload = torch.utils.data.DataLoader(dset, batch_size=num_to_log, shuffle=False, num_workers=0)
+        input_batch = next(iter(dload))
+
+        mask_list = []
+        inputs, labels, paths = input_batch
+        # the raw background image as a numpy array
+        # show images
+        # for bg_im in inputs:
+        #     plt.imshow(bg_im.cpu().permute(1, 2, 0).numpy())
+        #     plt.show()
+        # for path in paths:
+        #     img = mpimg.imread(path)
+        #     imgplot = plt.imshow(img)
+        #     plt.show()
+        #
+        # for label in labels:
+        #     plt.imshow(label.cpu().permute(1, 2, 0).numpy())
+        #     plt.show()
+
+        bg_image = utils_log.image2np(get_transforms(True)(inputs) * 255).astype(np.uint8)
+        # run the model on that image
+
+        labels = labels.long().squeeze()
+        if GPU:
+            inputs = inputs.float().cuda()
+            labels = labels.cuda()
+
+        prediction_mask = model(inputs)
+        # for label in prediction_mask:
+        #     plt.imshow(np.expand_dims(label.cpu().permute(1, 2, 0).numpy()[:, :, 0] > 0.5, 2).astype(np.uint8))
+        #     # plt.imshow((label.cpu().permute(1, 2, 0).numpy()[:, :, 0] > 0.5).astype(np.uint8))
+        #
+        #     plt.show()
+
+        prediction_mask = np.round(utils_log.image2np(prediction_mask > 0.5)).astype(np.uint8)
+
+        # ground truth mask
+        true_mask = utils_log.image2np(torch.unsqueeze(labels, 1)).astype(np.uint8)
+        # keep a list of composite images
+        mask_list.extend(utils_log.wb_mask(bg_image, prediction_mask, true_mask))
+
+        # log all composite images to W&B
+        if args.wandblog:
+            wandb.log({"predictions": mask_list})
 
 
 def save_models(args, SAVE_FILE_SUFFIX):
@@ -186,11 +242,20 @@ def train(args):
     metric_tracker = IoU_Metric(num_classes=2)
 
     for epoch in range(args.num_epochs):
-        train_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes, GPU, best_model_metric, metric_tracker)
-        eval_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes, GPU, best_model_metric, metric_tracker)
+        train_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes, GPU, best_model_metric,
+                        metric_tracker)
+        eval_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes, GPU, best_model_metric,
+                       metric_tracker)
+        on_epoch_end(args, model, [dsets['test']], GPU)
     #
     # save_models(args, SAVE_FILE_SUFFIX)
     print('Job completed')
+
+
+if __name__ == "__main__":
+    fix_random_seed(42, True)
+    args = utils_log.parse_config()
+    train(args)
 
 
 def dummy_CE():
@@ -205,9 +270,3 @@ def dummy_CE():
     # target = torch.randn(3, 5).softmax(dim=1)
     # output = loss(input, target)
     output.backward()
-
-
-if __name__ == "__main__":
-    args = utils_log.parse_config()
-    train(args)
-    # dummy_CE()

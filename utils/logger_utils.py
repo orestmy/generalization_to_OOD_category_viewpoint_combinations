@@ -1,6 +1,8 @@
 import argparse
 import os
 import wandb
+from torch import Tensor
+import numpy as np
 
 
 def parse_config():
@@ -71,6 +73,7 @@ def log_wandb(phase, epoch, epoch_loss, epoch_accs):
         logdict[phase + '_acc{}'.format(id)] = acc
     wandb.log(logdict, step=epoch)
 
+
 def log_wandb(phase, epoch, d_metric):
     oldkeys = list(d_metric.keys())
     for old_key in oldkeys:
@@ -88,6 +91,15 @@ def labels():
 
 # util function for generating interactive image mask from components
 def wb_mask(bg_img, pred_mask, true_mask):
-    return wandb.Image(bg_img, masks={
-        "prediction": {"mask_data": pred_mask, "class_labels": labels()},
-        "ground truth": {"mask_data": true_mask, "class_labels": labels()}})
+    res = []
+    for i in range(len(bg_img)):
+           res.append(wandb.Image(bg_img[i], masks={
+            "prediction": dict(mask_data=pred_mask[i, :, :, 1], class_labels=labels()),
+            "ground truth": dict(mask_data=true_mask[i].squeeze(), class_labels=labels())}))
+    return res
+
+
+def image2np(image: Tensor) -> np.ndarray:
+    "Convert from torch style `image` to numpy/matplotlib style - borrowed from fast.ai"
+    res = image.cpu().permute(0, 2, 3, 1).numpy()
+    return res
