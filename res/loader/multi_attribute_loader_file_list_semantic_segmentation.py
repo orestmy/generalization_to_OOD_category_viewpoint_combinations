@@ -121,7 +121,7 @@ class FileListFolder(data.Dataset):
 
         # label = np.array(label)
 
-        return transformed_sample, np.array(formatted_label), impath
+        return transformed_sample, np.round(np.array(formatted_label)), impath
 
     def __len__(self):
         return len(self.samples)
