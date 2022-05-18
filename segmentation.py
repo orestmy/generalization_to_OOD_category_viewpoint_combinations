@@ -167,14 +167,10 @@ def on_epoch_end(args, model, dsets, GPU, num_to_log=4):
         bg_image = utils_log.image2np(get_transforms(True)(inputs) * 255).astype(np.uint8)
         # run the model on that image
 
-        labels = labels.squeeze()
+        labels = labels.long().squeeze()
         if GPU:
             inputs = inputs.float().cuda()
             labels = labels.cuda()
-
-        # for label in labels:
-        #     plt.imshow((label>=0.99).cpu().numpy())
-        #     plt.show()
 
         prediction_mask = model(inputs)
         # for label in prediction_mask:
@@ -186,7 +182,7 @@ def on_epoch_end(args, model, dsets, GPU, num_to_log=4):
         prediction_mask = np.round(utils_log.image2np(prediction_mask > 0.5)).astype(np.uint8)
 
         # ground truth mask
-        true_mask = utils_log.image2np(torch.unsqueeze(labels, 1)).astype(np.uint8)
+        true_mask = np.round(utils_log.image2np(torch.unsqueeze(labels, 1))).astype(np.uint8)
         # for label in true_mask:
         #     plt.imshow(label)
         #     plt.show()
@@ -198,7 +194,7 @@ def on_epoch_end(args, model, dsets, GPU, num_to_log=4):
             wandb.log({"predictions": mask_list})
 
 
-def save_models(args, SAVE_FILE_SUFFIX):
+def save_models(best_model, args, SAVE_FILE_SUFFIX):
     file = os.path.basename(__file__)
     train_file_name = os.path.splitext(file)[0]
     if args.task == "combined":
@@ -207,8 +203,8 @@ def save_models(args, SAVE_FILE_SUFFIX):
     else:
         modelpath = "outputs/%s/saved_models/%s_%s_model_%s_%s_%s.pt" % (
             args.experiment_out_name, train_file_name, args.task, args.arch, args.dataset_name, SAVE_FILE_SUFFIX)
-        # with open(modelpath,"wb") as F:
-        #         torch.save(best_model, F)
+        with open(modelpath,"wb") as F:
+                torch.save(best_model, F)
 
     if args.wandblog:
         wandb.config.update({"model_path": modelpath})
@@ -255,7 +251,7 @@ def train(args):
                        metric_tracker)
         on_epoch_end(args, model, [dsets['test']], GPU)
     #
-    # save_models(args, SAVE_FILE_SUFFIX)
+    save_models(best_model_metric[0], args, SAVE_FILE_SUFFIX)
     print('Job completed')
 
 
