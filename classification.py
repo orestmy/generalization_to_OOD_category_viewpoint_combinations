@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.autograd import Variable
+import numpy as np
 from torchvision import transforms
 import os
 from PIL import ImageFile
@@ -140,11 +141,76 @@ def train(args):
                     best_acc = gm_epoch_accs
                     best_model_gm = model
 
-    save_models(best_model, args, SAVE_FILE_SUFFIX)
+    on_epoch_end(args, model, dset_loaders, ['val', 'test'], GPU)
+
+    # save_models(best_model, args, SAVE_FILE_SUFFIX)
     print('Job completed, best model saved')
+
+def on_epoch_end(args, model, dloader, phases, GPU):
+    model.eval()
+    torch.set_grad_enabled(False)
+    embeddings_l = []
+    labels_l = []
+
+    for phase in phases:
+        for data in dloader[phase]:
+            inputs, labels, paths = data
+
+            labels = labels.long().squeeze()
+            if GPU:
+                model.cuda()
+                inputs = inputs.float().cuda()
+
+            model(inputs)
+
+            batch_embedding = model.embedding.cpu().numpy()
+            embeddings_l.extend(batch_embedding.tolist())
+            batch_labels1 = labels[:, 1].numpy()
+            batch_labels12 = labels[:, 3].numpy()
+            string_lab = ['{}_{}_{}'.format(batch_labels1[i], batch_labels12[i], phase) for i in range(len(batch_labels12))]
+            labels_l.extend(string_lab)
+
+    cols = ['f{}'.format(i) for i in range(len(embeddings_l[0]))]
+    for i in range(len(embeddings_l)):
+        embeddings_l[i].append(labels_l[i])
+        embeddings_l[i].append(labels_l[i].split('_')[-1])
+
+    cols.append('label1')
+    cols.append('phase')
+
+    if args.wandblog:
+        wandb.log({
+            "embeddings": wandb.Table(
+                columns=cols,
+                data=embeddings_l
+            )
+        })
+
+def json_to_tsv():
+    file = 'embeddings/embedding-rotation.json'
+    import json
+    with open(file, 'r') as j:
+        embeddings = json.load(j)
+    feat = embeddings['data']
+    return feat
+
+def _dump_embeddings():
+    # create embeddings for t-SNE tensorboard projector visualisation.
+    # https://projector.tensorflow.org/ - append Q_id and Same as header for labels.tsv
+    filename = 'embeddings/viz/features.tsv'
+    filename_label = 'embeddings/viz/labels.tsv'
+    feat = json_to_tsv()
+    n = len(feat[0])
+    with open(filename, 'a+') as embed_file, open(filename_label, 'a+') as label_file:
+        for i in range(len(feat)):
+            embedding = feat[i][:n-2]
+            embedding_str = ''.join(["{:.1f}".format(num) + '\t' for num in embedding])
+            embed_file.write(embedding_str + '\n')
+            label_file.write(feat[i][n-2] + '\t' + feat[i][n-1] + '\n')
 
 
 if __name__ == "__main__":
     fix_random_seed(42, True)
     args = utils_log.parse_config()
     train(args)
+    # _dump_embeddings()

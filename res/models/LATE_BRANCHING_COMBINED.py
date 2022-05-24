@@ -228,6 +228,8 @@ class ResNet(nn.Module):
         x = self.avgpools(x)
         x = torch.flatten(x, 1)
 
+        self.embedding = x
+
         x_out_1 = self.fc_1(x)
 
         x_out_2 = self.fc_2(x)
