@@ -97,4 +97,4 @@ def get_model(MODEL_ARCH,NUM_CLASSES):
         return wide_resnet50_2(num_classes = NUM_CLASSES)
     if MODEL_ARCH == 'Unet':
         from models.UNet import UNet
-        return UNet(out_channels=1)
+        return UNet(out_channels=NUM_CLASSES)

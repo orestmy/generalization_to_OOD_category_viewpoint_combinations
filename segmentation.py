@@ -25,6 +25,8 @@ import matplotlib.image as mpimg
 
 
 def get_transforms(inverse=False):
+    # inverse transform is needed to plot images in original colors (debug reasons)
+    # run with flag False to get proper CV image transform
     if not inverse:
         return transforms.Compose([
             transforms.Resize((224, 224)),
@@ -173,6 +175,7 @@ def on_epoch_end(args, model, dsets, GPU, num_to_log=4):
             labels = labels.cuda()
 
         prediction_mask = model(inputs)
+        prediction_mask = torch.softmax(prediction_mask,dim=1)
         # for label in prediction_mask:
         #     plt.imshow(np.expand_dims(label.cpu().permute(1, 2, 0).numpy()[:, :, 0] > 0.5, 2).astype(np.uint8))
         #     # plt.imshow((label.cpu().permute(1, 2, 0).numpy()[:, :, 0] > 0.5).astype(np.uint8))
@@ -187,7 +190,7 @@ def on_epoch_end(args, model, dsets, GPU, num_to_log=4):
         #     plt.imshow(label)
         #     plt.show()
 
-        mask_list.extend(utils_log.wb_mask(bg_image, prediction_mask, true_mask))
+        mask_list.extend(utils_log.wb_mask(bg_image, prediction_mask, true_mask, labels=dset.labels()))
 
         # log all composite images to W&B
         if args.wandblog:
@@ -214,8 +217,7 @@ def save_models(best_model, args, SAVE_FILE_SUFFIX):
 def train(args):
     utils_log.create_logging_folders(args)
     if args.wandblog:
-        wandb.init(project='ood-generalisation')
-        # ,               name='runnametest2')
+        wandb.init(project='ood-generalisation', name='segm_seen-{}_task-{}'.format(args.dataset_name, args.task))
 
     dsets, dset_loaders, dset_sizes, NUM_CLASSES = get_datasets_loaders(args, debugImages=False)
 
@@ -242,7 +244,7 @@ def train(args):
     best_val_loss = 100
     best_model_metric = [best_model, best_acc, best_val_loss]
 
-    metric_tracker = IoU_Metric(num_classes=2)
+    metric_tracker = IoU_Metric(num_classes=NUM_CLASSES)
 
     for epoch in range(args.num_epochs):
         train_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes, GPU, best_model_metric,

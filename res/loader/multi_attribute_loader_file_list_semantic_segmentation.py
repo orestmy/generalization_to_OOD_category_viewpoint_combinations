@@ -137,6 +137,13 @@ class FileListFolder(data.Dataset):
         # fmt_str += '{0}{1}'.format(tmp, self.target_transform.__repr__().replace('\n', '\n' + ' ' * len(tmp)))
         return fmt_str
 
+    def labels(self):
+        segmentation_classes = ['void', 'car']
+        labels_dict = {}
+        for i, label in enumerate(segmentation_classes):
+            labels_dict[i] = label
+        return labels_dict
+
     def show_images_on_subplot(self, labels=True, images=False):
         showcase = []
         items = [self.__getitem__(i) for i in range(25)]

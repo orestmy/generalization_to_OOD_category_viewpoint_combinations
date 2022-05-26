@@ -83,21 +83,13 @@ def log_wandb(phase, epoch, d_metric):
     wandb.log(d_metric, step=epoch)
 
 
-def labels():
-    segmentation_classes = ['void', 'car']
-    l = {}
-    for i, label in enumerate(segmentation_classes):
-        l[i] = label
-    return l
-
-
 # util function for generating interactive image mask from components
-def wb_mask(bg_img, pred_mask, true_mask):
+def wb_mask(bg_img, pred_mask, true_mask, labels):
     res = []
     for i in range(len(bg_img)):
            res.append(wandb.Image(bg_img[i], masks={
-            "prediction": dict(mask_data=pred_mask[i, :, :, 1], class_labels=labels()),
-            "ground truth": dict(mask_data=true_mask[i].squeeze(), class_labels=labels())}))
+            "prediction": dict(mask_data=pred_mask[i, :, :, 1], class_labels=labels),
+            "ground truth": dict(mask_data=true_mask[i].squeeze(), class_labels=labels)}))
     return res
 
 

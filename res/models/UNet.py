@@ -3,6 +3,7 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 
+# Unet borrowed from https://github.com/mateuszbuda/brain-segmentation-pytorch/blob/master/unet.py
 
 class UNet(nn.Module):
 
@@ -62,8 +63,11 @@ class UNet(nn.Module):
         dec1 = self.upconv1(dec2)
         dec1 = torch.cat((dec1, enc1), dim=1)
         dec1 = self.decoder1(dec1)
-        res = torch.squeeze(torch.sigmoid(self.conv(dec1)))
-        return torch.stack([res, 1-res], dim=1)
+        res = self.conv(dec1)
+        # res = torch.log_softmax(res, dim=1)
+        # res = torch.squeeze(torch.sigmoid(self.conv(dec1)))
+        # return torch.stack([res, 1-res], dim=1)
+        return res
 
     @staticmethod
     def _block(in_channels, features, name):
