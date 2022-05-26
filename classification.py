@@ -186,31 +186,33 @@ def on_epoch_end(args, model, dloader, phases, GPU):
             )
         })
 
-def json_to_tsv():
-    file = 'embeddings/embedding-rotation.json'
+def get_embedding_from_wandbjson():
+    # json file is stored at the end of segmentation run in Wandb
+    file = 'embeddings/embeddings-combined.json'
     import json
     with open(file, 'r') as j:
         embeddings = json.load(j)
     feat = embeddings['data']
     return feat
 
-def _dump_embeddings():
+def embeddings_to_tsv():
     # create embeddings for t-SNE tensorboard projector visualisation.
     # https://projector.tensorflow.org/ - append Q_id and Same as header for labels.tsv
-    filename = 'embeddings/viz/features.tsv'
-    filename_label = 'embeddings/viz/labels.tsv'
-    feat = json_to_tsv()
+    filename = 'embeddings/viz_combined/features_full_combined.tsv'
+    filename_label = 'embeddings/viz_combined/labels_full_combined.tsv'
+    feat = get_embedding_from_wandbjson()
     n = len(feat[0])
     with open(filename, 'a+') as embed_file, open(filename_label, 'a+') as label_file:
         for i in range(len(feat)):
             embedding = feat[i][:n-2]
             embedding_str = ''.join(["{:.1f}".format(num) + '\t' for num in embedding])
             embed_file.write(embedding_str + '\n')
-            label_file.write(feat[i][n-2] + '\t' + feat[i][n-1] + '\n')
+            triple = feat[i][n-2].split('_')
+            label_file.write(feat[i][n-2] + '\t' + feat[i][n-1] + '\t' + triple[0] + '\t' + triple[1] + '\n')
 
 
 if __name__ == "__main__":
     fix_random_seed(42, True)
     args = utils_log.parse_config()
     train(args)
-    # _dump_embeddings()
+    # embeddings_to_tsv()
