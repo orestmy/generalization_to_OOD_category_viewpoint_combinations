@@ -44,7 +44,7 @@ def get_datasets_loaders(args, debugImages=False):
     image_transform = get_transforms()
 
     data_dir = "data/"
-    dataset_cls, NUM_CLASSES, file_list_root, att_path = get_dataset_info(args.dataset_name)
+    dataset_cls, NUM_CLASSES, file_list_root, att_path = get_dataset_info(args.dataset_name, args.task)
     shuffles = {"train": True, "val": True, "test": False}
 
     ################ GET FROM USER CONFIG - TODO #####################
@@ -247,13 +247,13 @@ def train(args):
     metric_tracker = IoU_Metric(num_classes=NUM_CLASSES)
 
     for epoch in range(args.num_epochs):
-        # train_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes, GPU, best_model_metric,
-        #                 metric_tracker)
-        # eval_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes, GPU, best_model_metric,
-        #                metric_tracker)
+        train_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes, GPU, best_model_metric,
+                        metric_tracker)
+        eval_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes, GPU, best_model_metric,
+                       metric_tracker)
         on_epoch_end(args, model, [dsets['test']], GPU)
     #
-    # save_models(run_path, best_model_metric[0], args, SAVE_FILE_SUFFIX)
+    save_models(run_path, best_model_metric[0], args, SAVE_FILE_SUFFIX)
     print('Job completed')
 
 
