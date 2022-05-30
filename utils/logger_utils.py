@@ -1,5 +1,7 @@
 import argparse
 import os
+from datetime import datetime
+
 import wandb
 from torch import Tensor
 import numpy as np
@@ -16,6 +18,7 @@ def parse_config():
     parser.add_argument("--start_checkpoint_path", type=str)
     parser.add_argument("--task", type=str, default="combined")
     parser.add_argument("--wandblog", type=int, default=0)
+    parser.add_argument("--device", type=int, default=0)
     args = parser.parse_args()
     return args
 
@@ -28,9 +31,11 @@ def create_logging_folders(args):
     create_folder("outputs")
     create_folder("outputs/%s" % args.experiment_out_name)
     create_folder("outputs/%s/saved_models" % args.experiment_out_name)
-    create_folder("outputs/%s/accuracies" % args.experiment_out_name)
-    create_folder("outputs/%s/logs" % args.experiment_out_name)
-    create_folder("outputs/%s/losses" % args.experiment_out_name)
+    cur_dt = datetime.now()
+    cur_dt = cur_dt.strftime("%y%m%d_%H%M%S")
+    run_path = "outputs/{}/saved_models/benchmark-{}".format(args.experiment_out_name, cur_dt)
+    create_folder(run_path)
+    return run_path
 
 
 def get_log_filehandle(args, train_file_name):

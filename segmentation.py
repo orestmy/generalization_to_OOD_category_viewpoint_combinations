@@ -197,17 +197,16 @@ def on_epoch_end(args, model, dsets, GPU, num_to_log=16):
             wandb.log({"predictions": mask_list})
 
 
-def save_models(best_model, args, SAVE_FILE_SUFFIX):
+def save_models(run_path, best_model, args, SAVE_FILE_SUFFIX):
     file = os.path.basename(__file__)
     train_file_name = os.path.splitext(file)[0]
     if args.task == "combined":
-        modelpath = "outputs/%s/saved_models/%s_model_%s_%s_%s.pt" % (
-            args.experiment_out_name, train_file_name, args.arch, args.dataset_name, SAVE_FILE_SUFFIX)
+        modelpath = "%s/%s_model_%s_%s_%s.pt" % (run_path, train_file_name, args.arch, args.dataset_name, SAVE_FILE_SUFFIX)
     else:
-        modelpath = "outputs/%s/saved_models/%s_%s_model_%s_%s_%s.pt" % (
-            args.experiment_out_name, train_file_name, args.task, args.arch, args.dataset_name, SAVE_FILE_SUFFIX)
-        with open(modelpath, "wb") as F:
-            torch.save(best_model, F)
+        modelpath = "%s/%s_%s_model_%s_%s_%s.pt" % (run_path, train_file_name, args.task, args.arch, args.dataset_name, SAVE_FILE_SUFFIX)
+
+    with open(modelpath, "wb") as F:
+        torch.save(best_model, F)
 
     if args.wandblog:
         wandb.config.update({"model_path": modelpath})
@@ -215,7 +214,7 @@ def save_models(best_model, args, SAVE_FILE_SUFFIX):
 
 
 def train(args):
-    utils_log.create_logging_folders(args)
+    run_path = utils_log.create_logging_folders(args)
     if args.wandblog:
         wandb.init(project='ood-generalisation', name='segm_seen-{}_task-{}'.format(args.dataset_name, args.task))
 
@@ -254,7 +253,7 @@ def train(args):
         #                metric_tracker)
         on_epoch_end(args, model, [dsets['test']], GPU)
     #
-    # save_models(best_model_metric[0], args, SAVE_FILE_SUFFIX)
+    save_models(run_path, best_model_metric[0], args, SAVE_FILE_SUFFIX)
     print('Job completed')
 
 

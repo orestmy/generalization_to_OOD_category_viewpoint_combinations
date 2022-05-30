@@ -35,7 +35,7 @@ def cost_weight_task(TASK):
 
 
 def train(args):
-    utils_log.create_logging_folders(args)
+    run_path = utils_log.create_logging_folders(args)
     if args.wandblog:
         wandb.init(project='ood-generalisation', name='cls_seen-{}_task-{}'.format(args.dataset_name, args.task))
 
@@ -143,7 +143,7 @@ def train(args):
 
     on_epoch_end(args, model, dset_loaders, ['val', 'test'], GPU)
 
-    # save_models(best_model, args, SAVE_FILE_SUFFIX)
+    save_models(run_path, best_model, args, SAVE_FILE_SUFFIX)
     print('Job completed, best model saved')
 
 def on_epoch_end(args, model, dloader, phases, GPU):
