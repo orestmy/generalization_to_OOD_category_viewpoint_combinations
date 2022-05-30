@@ -88,7 +88,7 @@ def wb_mask(bg_img, pred_mask, true_mask, labels):
     res = []
     for i in range(len(bg_img)):
            res.append(wandb.Image(bg_img[i], masks={
-            "prediction": dict(mask_data=pred_mask[i, :, :, 1], class_labels=labels),
+            "prediction": dict(mask_data=pred_mask[i].squeeze(), class_labels=labels),
             "ground truth": dict(mask_data=true_mask[i].squeeze(), class_labels=labels)}))
     return res
 

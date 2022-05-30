@@ -15,7 +15,6 @@ import wandb
 from metrics.segmentation_metrics import IoU_Metric
 from utils.random_seed import fix_random_seed
 
-
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 # SAVE_HANDLER = utils_log.get_log_filehandle(args, train_file_name)
@@ -134,6 +133,7 @@ def train_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes
                 best_model = model
 
         best_model_metrics[0], best_model_metrics[1], best_model_metrics[2] = best_model, best_acc, best_val_loss
+        model.__setattr__('last_epoch', epoch)
 
 
 def eval_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes, GPU, best_model_metrics,
@@ -143,7 +143,7 @@ def eval_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes,
                     phases=('test',))
 
 
-def on_epoch_end(args, model, dsets, GPU, num_to_log=4):
+def on_epoch_end(args, model, dsets, GPU, num_to_log=16):
     model.eval()
     torch.set_grad_enabled(False)
     for dset in dsets:
@@ -175,14 +175,14 @@ def on_epoch_end(args, model, dsets, GPU, num_to_log=4):
             labels = labels.cuda()
 
         prediction_mask = model(inputs)
-        prediction_mask = torch.softmax(prediction_mask,dim=1)
+        prediction_mask = torch.softmax(prediction_mask, dim=1)
         # for label in prediction_mask:
         #     plt.imshow(np.expand_dims(label.cpu().permute(1, 2, 0).numpy()[:, :, 0] > 0.5, 2).astype(np.uint8))
         #     # plt.imshow((label.cpu().permute(1, 2, 0).numpy()[:, :, 0] > 0.5).astype(np.uint8))
         #
         #     plt.show()
-
-        prediction_mask = np.round(utils_log.image2np(prediction_mask > 0.5)).astype(np.uint8)
+        prediction_mask = torch.argmax(prediction_mask, dim=1)
+        prediction_mask = np.round(utils_log.image2np(torch.unsqueeze(prediction_mask, 1))).astype(np.uint8)
 
         # ground truth mask
         true_mask = np.round(utils_log.image2np(torch.unsqueeze(labels, 1))).astype(np.uint8)
@@ -206,8 +206,8 @@ def save_models(best_model, args, SAVE_FILE_SUFFIX):
     else:
         modelpath = "outputs/%s/saved_models/%s_%s_model_%s_%s_%s.pt" % (
             args.experiment_out_name, train_file_name, args.task, args.arch, args.dataset_name, SAVE_FILE_SUFFIX)
-        with open(modelpath,"wb") as F:
-                torch.save(best_model, F)
+        with open(modelpath, "wb") as F:
+            torch.save(best_model, F)
 
     if args.wandblog:
         wandb.config.update({"model_path": modelpath})
@@ -226,13 +226,14 @@ def train(args):
         print("Loading from %s" % args.start_checkpoint_path)
         model = torch.load(args.start_checkpoint_path)
         checkpoint_model_name = args.start_checkpoint_path.split("/")[-1].split(".pt")[0]
-        SAVE_FILE_SUFFIX = "%s_%s" % (args.save_file_suffix, checkpoint_model_name)
+        # SAVE_FILE_SUFFIX = "%s_%s" % (args.save_file_suffix, checkpoint_model_name)
     else:
         model = get_model(args.arch, NUM_CLASSES)
 
     criterion = nn.CrossEntropyLoss()
 
     # device = torch.device("cpu" if not torch.cuda.is_available() else args.device)
+    # torch.cuda.set_device(args.device)
     GPU = torch.cuda.is_available()
     if GPU:
         model.cuda()
@@ -247,13 +248,13 @@ def train(args):
     metric_tracker = IoU_Metric(num_classes=NUM_CLASSES)
 
     for epoch in range(args.num_epochs):
-        train_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes, GPU, best_model_metric,
-                        metric_tracker)
-        eval_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes, GPU, best_model_metric,
-                       metric_tracker)
+        # train_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes, GPU, best_model_metric,
+        #                 metric_tracker)
+        # eval_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes, GPU, best_model_metric,
+        #                metric_tracker)
         on_epoch_end(args, model, [dsets['test']], GPU)
     #
-    save_models(best_model_metric[0], args, SAVE_FILE_SUFFIX)
+    # save_models(best_model_metric[0], args, SAVE_FILE_SUFFIX)
     print('Job completed')
 
 

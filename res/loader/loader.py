@@ -4,6 +4,7 @@ from loader.multi_attribute_loader_file_list import FileListFolder as multi_attr
 from loader.multi_attribute_loader_file_list_ilab import FileListFolder as multi_attribute_loader_file_list_ilab
 from loader.multi_attribute_loader_file_list_mnist_rotation import FileListFolder as multi_attribute_loader_file_list_mnist_rotation
 from loader.multi_attribute_loader_file_list_semantic_segmentation import FileListFolder as multi_attribute_loader_file_list_semantic_segmentation
+from loader.multi_attribute_loader_file_list_semantic_segmentation_rotation import FileListFolder as multi_attribute_loader_file_list_semantic_segmentation_rotation
 import sys
 
 print(__file__)
@@ -23,7 +24,8 @@ def get_loader(name):
         "multi_attribute_loader_file_list" : multi_attribute_loader_file_list,
         "multi_attribute_loader_file_list_ilab" : multi_attribute_loader_file_list_ilab,
         "multi_attribute_loader_file_list_mnist_rotation" : multi_attribute_loader_file_list_mnist_rotation,
-        "multi_attribute_loader_file_list_semantic_segmentation":multi_attribute_loader_file_list_semantic_segmentation
+        "multi_attribute_loader_file_list_semantic_segmentation":multi_attribute_loader_file_list_semantic_segmentation,
+        "multi_attribute_loader_file_list_semantic_segmentation_rotation": multi_attribute_loader_file_list_semantic_segmentation_rotation
     }[name]
 
 
