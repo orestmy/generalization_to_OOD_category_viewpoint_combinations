@@ -133,7 +133,7 @@ def train_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes
                 best_model = model
 
         best_model_metrics[0], best_model_metrics[1], best_model_metrics[2] = best_model, best_acc, best_val_loss
-        model.__setattr__('last_epoch', epoch)
+        # model.__setattr__('last_epoch', 50)
 
 
 def eval_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes, GPU, best_model_metrics,
@@ -143,7 +143,7 @@ def eval_one_epoch(model, criterion, epoch, optimizer, dset_loaders, dset_sizes,
                     phases=('test',))
 
 
-def on_epoch_end(args, model, dsets, GPU, num_to_log=16):
+def on_epoch_end(args, model, dsets, GPU, num_to_log=4):
     model.eval()
     torch.set_grad_enabled(False)
     for dset in dsets:
@@ -231,10 +231,10 @@ def train(args):
 
     criterion = nn.CrossEntropyLoss()
 
-    # device = torch.device("cpu" if not torch.cuda.is_available() else args.device)
-    # torch.cuda.set_device(args.device)
+
     GPU = torch.cuda.is_available()
     if GPU:
+        torch.cuda.set_device(args.device)
         model.cuda()
 
     optimizer = optim.Adam(model.parameters(), lr=0.001)
@@ -253,7 +253,7 @@ def train(args):
         #                metric_tracker)
         on_epoch_end(args, model, [dsets['test']], GPU)
     #
-    save_models(run_path, best_model_metric[0], args, SAVE_FILE_SUFFIX)
+    # save_models(run_path, best_model_metric[0], args, SAVE_FILE_SUFFIX)
     print('Job completed')
 
 

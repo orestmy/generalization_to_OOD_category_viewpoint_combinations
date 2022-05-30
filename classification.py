@@ -53,6 +53,7 @@ def train(args):
     multi_losses = [nn.CrossEntropyLoss() for _ in range(4)]
     GPU = torch.cuda.is_available()
     if GPU:
+        torch.cuda.set_device(args.device)
         model.cuda()
         if args.arch == "MULTITASKRESNET":
             model.fcs = [i.cuda() for i in model.fcs]
