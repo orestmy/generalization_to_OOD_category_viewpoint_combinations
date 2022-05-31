@@ -16,6 +16,7 @@ from utils.data_utils import get_dataset_info
 from models.models import get_model
 import wandb
 
+from utils.helper_utils import get_digits
 from utils.random_seed import fix_random_seed
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -37,7 +38,7 @@ def cost_weight_task(TASK):
 def train(args):
     run_path = utils_log.create_logging_folders(args)
     if args.wandblog:
-        wandb.init(project='ood-generalisation', name='cls_seen-{}_task-{}'.format(args.dataset_name, args.task))
+        wandb.init(project='ood-generalisation', name='cls_seen{}_task-{}'.format(get_digits(args.dataset_name), args.task))
 
     dsets, dset_loaders, dset_sizes, NUM_CLASSES = get_datasets_loaders(args, debugImages=False)
 
