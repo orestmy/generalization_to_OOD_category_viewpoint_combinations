@@ -255,7 +255,7 @@ def train(args):
         on_epoch_end(args, model, [dsets['test']], GPU)
     #
     save_models(run_path, best_model_metric[0], args, SAVE_FILE_SUFFIX)
-    print('Job completed')
+    print('Job completed ')
 
 
 if __name__ == "__main__":
